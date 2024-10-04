@@ -2,7 +2,8 @@ from aws_cdk import (
     Stack,
     aws_s3 as s3,
     RemovalPolicy,
-    CfnOutput
+    CfnOutput,
+    aws_dynamodb as dynamodb,
 )
 from constructs import Construct
 
@@ -18,4 +19,18 @@ class GleanApiStack(Stack):
             removal_policy=RemovalPolicy.RETAIN
         )
 
+        glean_table = dynamodb.Table(
+            self,
+            "GleanTable",
+            partition_key=dynamodb.Attribute(
+                name="pk",
+                type=dynamodb.AttributeType.STRING,
+            ),
+            sort_key=dynamodb.Attribute(
+                name="sk",
+                type=dynamodb.AttributeType.STRING,
+            )
+        )
+
         CfnOutput(self, "GleanBucketName", value=glean_bucket.bucket_name)
+        CfnOutput(self, "GleanTableName", value=glean_table.table_name)
