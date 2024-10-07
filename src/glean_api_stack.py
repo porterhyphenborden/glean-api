@@ -4,6 +4,9 @@ from aws_cdk import (
     RemovalPolicy,
     CfnOutput,
     aws_dynamodb as dynamodb,
+    aws_lambda as _lambda,
+    aws_apigateway as apigateway,
+    aws_lambda_python_alpha as _plambda,
 )
 from constructs import Construct
 
@@ -32,5 +35,32 @@ class GleanApiStack(Stack):
             )
         )
 
+        create_event_lambda = _plambda.PythonFunction(
+            self,
+            "CreateEventLambda",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            entry="src",
+            index="endpoints/create_event.py",
+            handler="handler",
+            environment={
+                "GLEAN_TABLE_NAME": glean_table.table_name,
+            }
+        )
+
+        api = apigateway.RestApi(
+            self,
+            "GleanApi",
+            rest_api_name="glean",
+        )
+
+        users = api.root.add_resource("users")
+        user_by_id = users.add_resource("{user_id}")
+        events = user_by_id.add_resource("events")
+        events.add_method("POST", integration=apigateway.LambdaIntegration(create_event_lambda))
+
+        ### Permissions ###
+        glean_table.grant_read_write_data(create_event_lambda)
+
         CfnOutput(self, "GleanBucketName", value=glean_bucket.bucket_name)
         CfnOutput(self, "GleanTableName", value=glean_table.table_name)
+        CfnOutput(self, "GleanApiUrl", value=api.url)
