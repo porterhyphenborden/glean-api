@@ -7,6 +7,7 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_apigateway as apigateway,
     aws_lambda_python_alpha as _plambda,
+    aws_cognito as cognito,
 )
 from constructs import Construct
 
@@ -47,16 +48,59 @@ class GleanApiStack(Stack):
             }
         )
 
+        user_pool = cognito.UserPool(
+            self,
+            "GleanApiUserPool",
+            user_pool_name="glean_api_user_pool",
+            self_sign_up_enabled=True,
+            auto_verify={"email": True},
+            sign_in_aliases=cognito.SignInAliases(email=True),
+        )
+
+        cognito_domain = user_pool.add_domain(
+            "GleanCognitoDomain",
+            cognito_domain=cognito.CognitoDomainOptions(
+                domain_prefix="glean-api",
+            )
+        )
+
+        user_pool_client = user_pool.add_client(
+            "GleanApiUserPoolClient",
+            generate_secret=False,
+            auth_flows={
+                "user_password": True,
+                "user_srp": True,
+                "admin_user_password": True,
+            },
+            o_auth=cognito.OAuthSettings(
+                flows=cognito.OAuthFlows(
+                    authorization_code_grant=True
+                ),
+                callback_urls=["https://example.com/callback"],
+            )
+        )
+
         api = apigateway.RestApi(
             self,
             "GleanApi",
             rest_api_name="glean",
         )
 
+        authorizer = apigateway.CognitoUserPoolsAuthorizer(
+            self,
+            "CognitoAuthorizer",
+            cognito_user_pools=[user_pool]
+        )
+
         users = api.root.add_resource("users")
         user_by_id = users.add_resource("{user_id}")
         events = user_by_id.add_resource("events")
-        events.add_method("POST", integration=apigateway.LambdaIntegration(create_event_lambda))
+        events.add_method(
+            "POST",
+            integration=apigateway.LambdaIntegration(create_event_lambda),
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+            authorizer=authorizer,
+        )
 
         ### Permissions ###
         glean_table.grant_read_write_data(create_event_lambda)
@@ -64,3 +108,4 @@ class GleanApiStack(Stack):
         CfnOutput(self, "GleanBucketName", value=glean_bucket.bucket_name)
         CfnOutput(self, "GleanTableName", value=glean_table.table_name)
         CfnOutput(self, "GleanApiUrl", value=api.url)
+        CfnOutput(self, "CognitoDomainUrl", value=cognito_domain.domain_name)
