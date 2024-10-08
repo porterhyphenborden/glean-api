@@ -1,10 +1,12 @@
 import json
+import jwt
 
 from pydantic import ValidationError
 
 from models.events.api import EventRequest
 from models.events.db import EventModel
 from models.events.repository import item_exists
+from utils.auth import user_is_authorized_for_endpoint
 from utils.logger import logger
 
 
@@ -14,6 +16,20 @@ def handler(event, _):
     """
     request = json.loads(event.get("body"))
     logger.info(f"Received request: {request}")
+
+    # Check that user is authorized for this request
+    path_params = event.get("pathParameters")
+    token = event["headers"]["Authorization"].split(" ")[1]
+
+    if not user_is_authorized_for_endpoint(path_params, token):
+        response = {
+            "message": "Forbidden",
+            "details": "User is not authorized to make this request.",
+        }
+        return {
+            "statusCode": 403,
+            "body": json.dumps(response)
+        }
 
     # Validate request
     try:
