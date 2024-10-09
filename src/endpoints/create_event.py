@@ -33,7 +33,7 @@ def handler(event, _):
 
     # Validate request
     try:
-        event_request = EventRequest(**request)
+        event_request = EventRequest(**dict(request, user_id=path_params.get("user_id")))
     except ValidationError as exc:
         logger.warning(f"Received an invalid request: {request}")
         response = {

@@ -36,6 +36,8 @@ class GleanApiStack(Stack):
             )
         )
 
+        """ Lambdas """
+
         create_event_lambda = _plambda.PythonFunction(
             self,
             "CreateEventLambda",
@@ -47,6 +49,20 @@ class GleanApiStack(Stack):
                 "GLEAN_TABLE_NAME": glean_table.table_name,
             }
         )
+
+        get_events_lambda = _plambda.PythonFunction(
+            self,
+            "GetEventsLambda",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            entry="src",
+            index="endpoints/get_events.py",
+            handler="handler",
+            environment={
+                "GLEAN_TABLE_NAME": glean_table.table_name,
+            }
+        )
+
+        """ Cognito resources """
 
         user_pool = cognito.UserPool(
             self,
@@ -80,6 +96,8 @@ class GleanApiStack(Stack):
             )
         )
 
+        """ Api resources """
+
         api = apigateway.RestApi(
             self,
             "GleanApi",
@@ -101,9 +119,26 @@ class GleanApiStack(Stack):
             authorization_type=apigateway.AuthorizationType.COGNITO,
             authorizer=authorizer,
         )
+        seasons = events.add_resource("seasons")
+        season = seasons.add_resource("{season}")
+        season.add_method(
+            "GET",
+            integration=apigateway.LambdaIntegration(get_events_lambda),
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+            authorizer=authorizer,
+        )
+        crops = season.add_resource("crops")
+        crop = crops.add_resource("{crop}")
+        crop.add_method(
+            "GET",
+            integration=apigateway.LambdaIntegration(get_events_lambda),
+            authorization_type=apigateway.AuthorizationType.COGNITO,
+            authorizer=authorizer,
+        )
 
         ### Permissions ###
         glean_table.grant_read_write_data(create_event_lambda)
+        glean_table.grant_read_data(get_events_lambda)
 
         CfnOutput(self, "GleanBucketName", value=glean_bucket.bucket_name)
         CfnOutput(self, "GleanTableName", value=glean_table.table_name)

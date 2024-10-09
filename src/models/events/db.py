@@ -7,7 +7,7 @@ from pynamodb.models import Model
 from models.events.api import EventType, EventRequest
 
 
-SORT_KEY_TEMPLATE = "event#{season}#{crop_name}#{event_date}#{event_type}"
+SORT_KEY_TEMPLATE = "event#{season}#{crop}#{event_date}#{event_type}"
 
 
 class EventModel(Model):
@@ -32,7 +32,7 @@ class EventModel(Model):
         event_date_str = event_date.isoformat().split("T")[0]
         sort_key = SORT_KEY_TEMPLATE.format(
             season=season,
-            crop_name=crop_name,
+            crop=crop_name,
             event_date=event_date_str,
             event_type=event_type.value,
         )
@@ -58,3 +58,8 @@ class EventModel(Model):
             season=api_request.season,
             varieties=api_request.varieties,
         )
+    
+    def to_api_response(self):
+        dict_response = self.attribute_values
+        dict_response["event_date"] = dict_response["event_date"].isoformat()
+        return dict_response
